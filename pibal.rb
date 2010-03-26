@@ -131,7 +131,7 @@ class PiBal
       y = dist * cos(rad_azim)
       dx = x - x0
       dy = y - y0
-      deg = ((atan2(dx, dy) * RAD2DEG + 180) % 360 rescue nil)
+      deg = (atan2(dx, dy) * RAD2DEG % 360 rescue nil)
       vel = hypot(dx, dy) / @interval
       @x0, @y0, @z0 = x, y, z
       @scale = [@scale, dist].max
