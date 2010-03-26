@@ -259,6 +259,7 @@ alarm = 3
 view = true
 toaddr = []
 fromaddr = FROMADDR
+wait = 0.2
 sendmail = false
 opt = nil
 ARGV.options do |o|
@@ -267,6 +268,7 @@ ARGV.options do |o|
   opt.on("-s", "--speed=M/min", Integer, "ascending meters in a minute", [50, 100]) {|i| speed = nil}
   opt.on("-a", "--alarm=N", Integer, "alarms N times") {|i| alarm = i}
   opt.on("--[no-]view") {|v| view = v}
+  opt.on("--wait=SEC", Float, "wait in view mode") {|v| wait = v}
   opt.on("--to=ADDR") {|s| toaddr << s}
   opt.on("--from=ADDR") {|s| fromaddr = s}
   opt.on("-M", "--[no-]sendmail") {|s| sendmail = s}
@@ -352,7 +354,7 @@ else
       puts pibal.info
       if view
         pibal.plot
-        sleep 0.2
+        sleep wait
       end
       break if ARGF.eof?
     end
