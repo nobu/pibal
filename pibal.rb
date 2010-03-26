@@ -202,7 +202,7 @@ def mailbody(text, binary)
   if binary
     boundary = "_mp.#{Time.now.strftime("%H:%M:%S")}.#{rand(10000000)}_"
     header = "Content-Type: multipart/mixed; boundary=\"#{boundary}\""
-    binary, opt = binary[1]
+    binary, opt = *binary
     opt ||= {}
     if filename = opt[:filename]
       filename = "; filename=#{filename.dump}"
@@ -213,8 +213,8 @@ def mailbody(text, binary)
       '', text,
       '',
       "--#{boundary}",
-      'Content-Type: #{opt[:content_type]||"application/octet-stream"}',
-      'Content-Disposition: inline#{filename}',
+      "Content-Type: #{opt[:content_type]||"application/octet-stream"}",
+      "Content-Disposition: inline#{filename}",
       'Content-Transfer-Encoding: base64',
       '',
       [binary].pack('m'),
