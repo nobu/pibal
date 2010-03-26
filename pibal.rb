@@ -200,7 +200,7 @@ end
 
 def mailbody(text, binary)
   if binary
-    boundary = "_mp.#{Time.now("%H:%M:%S")}.#{rand(10000000)}_"
+    boundary = "_mp.#{Time.now.strftime("%H:%M:%S")}.#{rand(10000000)}_"
     header = "Content-Type: multipart/mixed; boundary=\"#{boundary}\""
     binary, opt = binary[1]
     opt ||= {}
