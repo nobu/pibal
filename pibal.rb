@@ -251,22 +251,30 @@ require 'optparse'
 
 FROMADDR = "pibal@example.com"
 speed = nil
-interval = 30
+interval = nil
 alarm = 3
 view = true
 toaddr = []
 fromaddr = FROMADDR
 sendmail = false
-ARGV.options do |opt|
-  opt.on("--interval=SEC", Integer) {|i| interval = i}
-  opt.on("--speed=M/min", Integer, [50, 100]) {|i| speed = nil}
-  opt.on("--alarm=N", Integer) {|i| alarm = i}
+opt = nil
+ARGV.options do |o|
+  opt = o
+  opt.on("-i", "--interval=SEC", Integer, "measuring interval in seconds") {|i| interval = i}
+  opt.on("-s", "--speed=M/min", Integer, "ascending meters in a minute", [50, 100]) {|i| speed = nil}
+  opt.on("-a", "--alarm=N", Integer, "alarms N times") {|i| alarm = i}
   opt.on("--[no-]view") {|v| view = v}
   opt.on("--to=ADDR") {|s| toaddr << s}
   opt.on("--from=ADDR") {|s| fromaddr = s}
-  opt.on("--[no-]sendmail") {|s| sendmail = s}
+  opt.on("-M", "--[no-]sendmail") {|s| sendmail = s}
   opt.parse! rescue opt.abort([$!.message, opt.to_s].join("\n"))
+end
+if interval
   alarm = [alarm, interval-1].min
+  ARGV.empty? or opt.abort("--interval and log files are mutual")
+elsif ARGV.empty?
+  puts opt
+  exit
 end
 
 mailcount = 0
@@ -294,7 +302,7 @@ if ARGV.empty?
       ask("Hit enter to finish.\n") if tty
       main.raise(StopIteration)
     end
-    pibal.plot
+    pibal.plot if view
     puts pibal.title
     starttime = Time.now
     begin
@@ -306,7 +314,7 @@ if ARGV.empty?
           if n.zero?
             SOUNDS.play(1) if tty
             pibal.add((z * i), x.azimuth.fdiv(10), x.pitch.fdiv(10))
-            pibal.plot
+            pibal.plot if view
             info = pibal.info
             puts info
             log.puts info
