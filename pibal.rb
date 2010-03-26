@@ -102,12 +102,12 @@ class PiBal
   def plot(data = @data, scale = @scale)
     if scale > 0
       dec = 10 ** log10(scale).floor
-      if (scale = (scale / dec).ceil) > 6
+      if (scale = (scale * 2 / dec).ceil) > 4
         scale = (scale + 1) & ~1
       end
-      scale *= dec
+      scale *= dec / 2
     end
-    unit = scale > 1000 ? 1000 : 1
+    unit = scale > 1000 ? 1000.0 : 1
     scale /= unit
     command("scale = #{scale}")
     command('plot [-scale:scale][-scale:scale] "-" using 1:2:3:4 with vector lw 2 notitle')
