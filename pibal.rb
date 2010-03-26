@@ -178,13 +178,20 @@ class PiBal
     ]
   end
 
-  def gif(size = [240, 240], font = ["arial", 10])
+  IMAGE_EXTS = {
+    'jpeg' => 'jpg',
+    'gif' => 'gif',
+    'png' => 'png',
+  }
+
+  def image(type, size = [240, 240], font = ["arial", 10])
     d = nil
-    Tempfile.open(%w"pibal .gif") do |tmp|
+    ext = IMAGE_EXTS[type] or raise "unknown type `#{type}'"
+    Tempfile.open(%w"pibal .#{ext}") do |tmp|
       tmp.close
       command(<<-OUTPUT)
         set terminal push
-        set terminal gif crop font "#{font.join(',')}" size #{size.join(',')}
+        set terminal #{type} crop font "#{font.join(',')}" size #{size.join(',')}
         set output "#{tmp.path}"
       OUTPUT
       yield
@@ -194,13 +201,14 @@ class PiBal
       OUTPUT
       d = tmp.open.read
     end
-    d
+    return d, ext
   end
 end
 
-class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :authtype)
+class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :authtype, :image_type)
   def initialize(fromaddr, toaddr = [], *rest)
     super
+    self.image_type ||= 'gif'
   end
 
   def body(data)
@@ -322,6 +330,7 @@ ARGV.options do |o|
   opt.on("--wait=SEC", Float, "wait in view mode") {|v| wait = v}
   opt.on("--to=ADDR") {|s| mailopt.toaddr << s}
   opt.on("--from=ADDR") {|s| mailopt.fromaddr = s}
+  opt.on("-I", "--image-type={GIF,JPEG,PNG}", PiBal::IMAGE_EXTS.keys) {|i| mailopt.image_type = i}
   opt.on("-M", "--[no-]sendmail[=host:port]", /([^:]+)(?::(\d+))?/) {|s, host, port|
     if s
       mailopt.hostname = nil
@@ -342,8 +351,9 @@ end
 
 def mailopt.send(pibal, starttime)
   results = pibal.results.join("\n")
-  gifdata = {data: pibal.gif {pibal.plot}, content_type: "image/gif", filename: "pibal.gif"}
-  super([results, gifdata], starttime)
+  image, ext = pibal.image(type = self.image_type) {pibal.plot}
+  image = {data: image, content_type: "image/#{type}", filename: "pibal.#{ext}"}
+  super([results, image], starttime)
 end
 
 if ARGV.empty?
