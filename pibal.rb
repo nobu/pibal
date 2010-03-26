@@ -186,7 +186,7 @@ end
 
 def ask(prompt, ans = "")
   STDOUT.print(prompt)
-  while c = STDIN.getch
+  while c = STDIN.noecho {STDIN.getc}
     if ans.include?(c)
       break
     elsif "\r\n".include?(c)
@@ -290,7 +290,6 @@ if ARGV.empty?
     end
     pibal.plot
     puts pibal.title
-    print cr
     starttime = Time.now
     begin
       open("pibal-#{starttime.strftime("%Y%m%d_%H%M%S")}.log", "wb") do |log|
@@ -304,7 +303,6 @@ if ARGV.empty?
             pibal.plot
             info = pibal.info
             puts info
-            print cr
             log.puts info
           elsif tty
             SOUNDS.play(0) if interval - n < alarm
