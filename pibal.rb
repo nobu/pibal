@@ -39,8 +39,10 @@ class PiBal
   include Math
   DEG2RAD = PI / 180
   RAD2DEG = 180 / PI
+  DEFAULT_SPEED = Rational(100, 60)
 
-  attr_reader :scale, :data, :interval
+  attr_reader :scale, :data
+  attr_accessor :speed
 
   def self.open(*args)
     pibal = new(*args)
@@ -66,9 +68,9 @@ class PiBal
     @data.clear
   end
 
-  def initialize(interval = 60)
+  def initialize(speed = nil)
     @plot = nil
-    @interval = interval
+    @speed = speed || DEFAULT_SPEED
     @data = []
     clear
   end
@@ -122,6 +124,7 @@ class PiBal
   def add(z, azim, elev)
     x0 = @x0
     y0 = @y0
+    z0 = @z0
     dx = dy = vel = 0
     if elev > 0
       rad_azim = azim * DEG2RAD
@@ -131,8 +134,9 @@ class PiBal
       y = dist * cos(rad_azim)
       dx = x - x0
       dy = y - y0
+      dz = z - z0
       deg = (atan2(dx, dy) * RAD2DEG % 360 rescue nil)
-      vel = hypot(dx, dy) / @interval
+      vel = hypot(dx, dy) / dz * @speed
       @x0, @y0, @z0 = x, y, z
       @scale = [@scale, dist].max
     end
@@ -246,31 +250,33 @@ require 'io/console'
 require 'optparse'
 
 FROMADDR = "pibal@example.com"
-speed = Rational(100, 60)
+speed = nil
 interval = 30
 alarm = 3
 view = true
 toaddr = []
 fromaddr = FROMADDR
+sendmail = false
 ARGV.options do |opt|
   opt.on("--interval=SEC", Integer) {|i| interval = i}
-  opt.on("--speed=M/min", Integer, [50, 100]) {|i| speed = Rational(i, 60)}
+  opt.on("--speed=M/min", Integer, [50, 100]) {|i| speed = nil}
   opt.on("--alarm=N", Integer) {|i| alarm = i}
   opt.on("--[no-]view") {|v| view = v}
   opt.on("--to=ADDR") {|s| toaddr << s}
   opt.on("--from=ADDR") {|s| fromaddr = s}
+  opt.on("--[no-]sendmail") {|s| sendmail = s}
   opt.parse! rescue opt.abort([$!.message, opt.to_s].join("\n"))
   alarm = [alarm, interval-1].min
 end
 
 mailcount = 0
-sendmail = proc do |pibal, starttime|
+sendmail = sendmail ? proc do |pibal, starttime|
   results = pibal.results
   gifdata = pibal.gif {pibal.plot}
   mail(results, gifdata, fromaddr: fromaddr, toaddr: toaddr, time: starttime) do |m|
     open("mail-#{mailcount+=1}.txt", "wb") {|f| f.print(m)}
   end
-end
+end : proc {}
 
 if ARGV.empty?
   require_relative 'tds01v'
@@ -281,8 +287,8 @@ if ARGV.empty?
     clear_line = cr = ""
   end
   tds = TDS01V.new
-  PiBal.session(interval) do |pibal|
-    z = interval * speed
+  PiBal.session(speed) do |pibal|
+    z = interval * pibal.speed
     puts "ROM version = #{tds.rom_version * '.'}"
     watcher = Thread.start(Thread.current) do |main|
       ask("Hit enter to finish.\n") if tty
@@ -293,7 +299,7 @@ if ARGV.empty?
     starttime = Time.now
     begin
       open("pibal-#{starttime.strftime("%Y%m%d_%H%M%S")}.log", "wb") do |log|
-        log.puts("#{starttime} (#{interval}sec)")
+        log.puts("#{starttime} (#{speed * 60}m/min)")
         tds.enum_for(:start).with_index do |x, i|
           print clear_line
           n = (i + 1) % interval
@@ -318,9 +324,9 @@ if ARGV.empty?
   end
 else
   require 'time'
-  PiBal.session(interval) do |pibal|
+  PiBal.session() do |pibal|
     firstline = ARGF.gets or break
-    interval = (firstline[/(\d+)sec/, 1] or next).to_i
+    speed = Rational((firstline[/(\d+)m\/min/, 1] or next).to_i, 60)
     starttime = Time.parse(firstline)
     puts pibal.title
     ARGF.each_line do |line|
