@@ -334,7 +334,12 @@ else
   require 'time'
   PiBal.session() do |pibal|
     firstline = ARGF.gets or break
-    speed = Rational((firstline[/(\d+)m\/min/, 1] or next).to_i, 60)
+    unless speed = firstline[/(\d+)m\/min/, 1]
+      ARGF.close
+      opt.warn "missing acsending speed in #{ARGF.filename}"
+      redo
+    end
+    pibal.speed = Rational(speed.to_i, 60)
     starttime = Time.parse(firstline)
     puts pibal.title
     ARGF.each_line do |line|
