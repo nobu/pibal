@@ -143,7 +143,7 @@ class PiBal
     @data << [azim, elev, x0, y0, z, dx, dy, deg, vel]
   end
 
-  Title = " Hght  Azim  Elev       X(m)       Y(m)      dX(m)      dY(m)   To  M/s"
+  Title = "Height  Azim  Elev       X(m)       Y(m)      dX(m)      dY(m)   To  M/s"
   def title
     self.class::Title
   end
@@ -154,7 +154,7 @@ class PiBal
 
   def info(info = @data.last)
     azim, elev, x, y, z, dx, dy, deg, vel = *info
-    sprintf("%5d %5.1f %5.1f %10.2f %10.2f %10.2f %10.2f %4s %4.1f",
+    sprintf("%6d %5.1f %5.1f %10.2f %10.2f %10.2f %10.2f %4s %4.1f",
             z, azim, elev, x+dx, y+dy, dx, dy, DEGREE%deg, vel)
   end
 
@@ -164,7 +164,10 @@ class PiBal
   end
 
   def results
-    @data.map {|info| result(info)}
+    [
+     " HGHT   TO  M/S",
+     *@data.map {|info| result(info)}
+    ]
   end
 
   def gif(size = [240, 240], font = ["arial", 10])
