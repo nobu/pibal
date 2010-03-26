@@ -1,4 +1,12 @@
-#! /usr/local/bin/ruby
+#! /usr/local/bin/ruby19
+
+require 'tempfile'
+require 'netrc'
+require 'io/console'
+require 'optparse'
+require 'time'
+require_relative 'tds01v'
+
 STDOUT.sync = true
 
 case RUBY_PLATFORM
@@ -171,7 +179,6 @@ class PiBal
   end
 
   def gif(size = [240, 240], font = ["arial", 10])
-    require 'tempfile'
     d = nil
     Tempfile.open(%w"pibal .gif") do |tmp|
       tmp.close
@@ -191,6 +198,99 @@ class PiBal
   end
 end
 
+class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :authtype)
+  def initialize(fromaddr, toaddr = [], *rest)
+    super
+  end
+
+  def body(data)
+    if Array === data
+      bodies = data.map do |d|
+        h, b = body(d)
+        [h, '', b].join("\n")
+      end
+      boundary_base = "_mp.#{Time.now.strftime("%H:%M:%S")}."
+      begin
+        boundary = "#{boundary_base}#{rand(10000000)}_"
+        boundary_pat = /^--#{Regexp.quote(boundary)}(?:--)?$/
+      end while bodies.any? {|s| boundary_pat =~ s}
+      bodies.unshift('')
+      header = "Content-Type: multipart/mixed; boundary=\"#{boundary}\""
+      (body = bodies.join("\n\n--#{boundary}\n")).strip!
+      body << "\n\n--#{boundary}--\n"
+    else
+      if Hash === data
+        content_type = data[:content_type]
+        charset = data[:charset]
+        filename = data[:filename]
+        data = data[:data]
+      end
+      if data.encoding == Encoding::ASCII_8BIT
+        content_type ||=
+          case filename
+          when /\.gif$/i
+            "image/gif"
+          when /\.jpe?g$/i
+            "image/jpeg"
+          when /\.png$/i
+            "image/png"
+          else
+            "application/octet-stream"
+          end
+        filename &&= "; filename=#{filename.dump}"
+      else
+        content_type ||= "text/plain"
+        charset ||=
+          if (text = data.dup.force_encoding(Encoding::US_ASCII)).valid_encoding?
+            data = text
+            "us-ascii"
+          else
+            data.encoding.name
+          end
+      end
+      if /^text\// =~ content_type
+        header = "Content-Type: #{content_type}; charset=#{charset}"
+        body = data
+      else
+        header = ["Content-Type: #{content_type}",
+                  "Content-Disposition: inline#{filename}",
+                  'Content-Transfer-Encoding: base64']
+        body = [data].pack('m')
+      end
+    end
+    return header, body
+  end
+
+  def send(data, time = Time.now)
+    if host = self.host and user = self.user
+      passwd = Net::Netrc.load[host][user]
+    end
+    header, body = body(data)
+    mail = [
+            "To: #{self.toaddr.join(", ")}",
+            "From: #{self.fromaddr}",
+            "Subject: pibal #{time.strftime("%H:%M:%S")}",
+            'MIME-Version: 1.0',
+            header, '', body
+           ]
+    if host
+      smtp = Net::SMTP.new(host, self.port)
+      smtp.enable_starttls_auto
+      smtp.start(Socket.gethostname, user, passwd, self.authtype) do |m|
+        m.send_mail(mail, self.fromaddr, *self.toaddr)
+      end
+    else
+      i = Dir.glob("mail-*.txt").grep(/\d+/) {$&.to_i}.max || 0
+      begin
+        open("mail-#{i+=1}.txt", IO::WRONLY|IO::EXCL|IO::CREAT) {|f| f.puts(mail)}
+      rescue Errno::EEXIST
+        i += 1
+        retry
+      end
+    end
+  end
+end
+
 def ask(prompt, ans = "")
   STDOUT.print(prompt)
   while c = STDIN.noecho {STDIN.getc}
@@ -205,63 +305,14 @@ def ask(prompt, ans = "")
   c
 end
 
-def mailbody(text, binary)
-  if binary
-    boundary = "_mp.#{Time.now.strftime("%H:%M:%S")}.#{rand(10000000)}_"
-    header = "Content-Type: multipart/mixed; boundary=\"#{boundary}\""
-    binary, opt = *binary
-    opt ||= {}
-    if filename = opt[:filename]
-      filename = "; filename=#{filename.dump}"
-    end
-    body = [
-      "--#{boundary}",
-      'Content-Type: text/plain; charset=US-ASCII',
-      '', text,
-      '',
-      "--#{boundary}",
-      "Content-Type: #{opt[:content_type]||"application/octet-stream"}",
-      "Content-Disposition: inline#{filename}",
-      'Content-Transfer-Encoding: base64',
-      '',
-      [binary].pack('m'),
-      '',
-      "--#{boundary}--",
-      ''
-    ].join("\n")
-  else
-    body = [text].join("\n")
-  end
-  return header, body
-end
-
-def mail(text, gifdata, opt)
-  header, body = mailbody(text,
-                          [gifdata, content_type: "image/gif", filename: "pibal.gif"])
-  mail = [
-    "To: #{opt[:toaddr].join(", ")}",
-    "From: #{opt[:fromaddr]}",
-    "Subject: pibal #{opt[:time].strftime("%H:%M:%S")}",
-    'MIME-Version: 1.0',
-    header, '', body
-  ].join("\n")
-  mail.gsub!(/\n/, "\r\n")
-  yield mail
-end
-
-require 'io/console'
-require 'optparse'
-
 FROMADDR = "pibal@example.com"
 speed = nil
 interval = nil
 alarm = 3
 view = true
-toaddr = []
-fromaddr = FROMADDR
 wait = 0.2
-sendmail = false
 opt = nil
+mailopt = Mailer.new(FROMADDR, [])
 ARGV.options do |o|
   opt = o
   opt.on("-i", "--interval=SEC", Integer, "measuring interval in seconds") {|i| interval = i}
@@ -269,9 +320,16 @@ ARGV.options do |o|
   opt.on("-a", "--alarm=N", Integer, "alarms N times") {|i| alarm = i}
   opt.on("--[no-]view") {|v| view = v}
   opt.on("--wait=SEC", Float, "wait in view mode") {|v| wait = v}
-  opt.on("--to=ADDR") {|s| toaddr << s}
-  opt.on("--from=ADDR") {|s| fromaddr = s}
-  opt.on("-M", "--[no-]sendmail") {|s| sendmail = s}
+  opt.on("--to=ADDR") {|s| mailopt.toaddr << s}
+  opt.on("--from=ADDR") {|s| mailopt.fromaddr = s}
+  opt.on("-M", "--[no-]sendmail[=host:port]", /([^:]+)(?::(\d+))?/) {|s, host, port|
+    if s
+      mailopt.hostname = nil
+    else
+      mailopt.hostname = host
+      mailopt.hostport = port.to_i
+    end
+  }
   opt.parse! rescue opt.abort([$!.message, opt.to_s].join("\n"))
 end
 if interval
@@ -282,17 +340,13 @@ elsif ARGV.empty?
   exit
 end
 
-mailcount = 0
-sendmail = sendmail ? proc do |pibal, starttime|
-  results = pibal.results
-  gifdata = pibal.gif {pibal.plot}
-  mail(results, gifdata, fromaddr: fromaddr, toaddr: toaddr, time: starttime) do |m|
-    open("mail-#{mailcount+=1}.txt", "wb") {|f| f.print(m)}
-  end
-end : proc {}
+def mailopt.send(pibal, starttime)
+  results = pibal.results.join("\n")
+  gifdata = {data: pibal.gif {pibal.plot}, content_type: "image/gif", filename: "pibal.gif"}
+  super([results, gifdata], starttime)
+end
 
 if ARGV.empty?
-  require_relative 'tds01v'
   if tty = STDOUT.tty?
     clear_line = "\r\e[K"
     cr = "\r"
@@ -332,11 +386,10 @@ if ARGV.empty?
     rescue StopIteration, EOFError
     end
     print clear_line
-    sendmail[pibal, starttime]
+    mailopt.send(pibal, starttime)
     /y/i =~ ask("Continue? [Y/n]", "YyNn")
   end
 else
-  require 'time'
   PiBal.session() do |pibal|
     firstline = ARGF.gets or break
     unless speed = firstline[/(\d+)m\/min/, 1]
@@ -358,7 +411,7 @@ else
       end
       break if ARGF.eof?
     end
-    sendmail[pibal, starttime]
+    mailopt.send(pibal, starttime)
     ask("Hit return to go next.") if view
     true
   end
