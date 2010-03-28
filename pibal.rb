@@ -89,7 +89,9 @@ class PiBal
       @plot = Gnuplot.new
       @plot.command(<<-PRESET)
         set angles degree
-        set grid polar 45
+        set style line 2 linewidth 1 linecolor rgbcolor "#c0c0c0
+        set style line 3 linewidth 0 linecolor rgbcolor "#e0e0e0
+        set grid polar 45 linestyle 2, linestyle 3
         set size square
         set zeroaxis
         set xtics axis nomirror scale 0 format ""
