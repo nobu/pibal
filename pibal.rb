@@ -2,6 +2,7 @@
 
 require 'tempfile'
 require 'netrc'
+require 'net/smtp'
 require 'io/console'
 require 'optparse'
 require 'time'
@@ -205,10 +206,30 @@ class PiBal
   end
 end
 
-class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :authtype, :image_type)
-  def initialize(fromaddr, toaddr = [], *rest)
+class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :authtype, :connection, :image_type)
+  def initialize(fromaddr = nil, toaddr = [], *rest)
     super
     self.image_type ||= 'gif'
+  end
+
+  CONNECTION_TYPE = [:tls, :starttls]
+  AUTHENTICATION_TYPE = {'plain' => :plain, 'clear' => :plain, 'login' => :login, 'cram' => :cram_md5}
+  SERVER_PATTERN = %r"([^/]*)(?i:/(#{AUTHENTICATION_TYPE.keys.join('|')}))?@([^@:]+)(?::(\d+))?(!{1,2})"
+  def server=(args)
+    if args.size == 1
+      args = SERVER_PATTERN.match(str = args.first) or raise ArgumentError, "invaid server `#{str}'"
+      args = args.to_a
+    end
+    user, authtype, host, port, conn = *args
+    if user and host
+      self.user = user
+      self.authtype = AUTHENTICATION_TYPE[authtype]
+      self.host = host
+      self.port = port.to_i
+      self.connection = (CONNECTION_TYPE[conn.length - 1] if conn)
+    else
+      self.user = self.host = nil
+    end
   end
 
   def body(data)
@@ -271,21 +292,26 @@ class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :aut
 
   def send(data, time = Time.now)
     if host = self.host and user = self.user
-      passwd = Net::Netrc.load[host][user]
+      passwd = Net::Netrc.load[host][user].password
+    end
+    if !(fromaddr = self.fromaddr) and (fromaddr = user) and /@/ !~ user
+      fromaddr = "#{user}@#{host}"
     end
     header, body = body(data)
     mail = [
             "To: #{self.toaddr.join(", ")}",
-            "From: #{self.fromaddr}",
+            "From: #{self.fromaddr || "#{user}@#{host}"}",
             "Subject: pibal #{time.strftime("%H:%M:%S")}",
             'MIME-Version: 1.0',
             header, '', body
-           ]
-    if host
+           ].join("\n")
+    if host and !(toaddr = self.toaddr).empty?
       smtp = Net::SMTP.new(host, self.port)
-      smtp.enable_starttls_auto
+      if self.connection
+        smtp.__send__("enable_#{self.connection}")
+      end
       smtp.start(Socket.gethostname, user, passwd, self.authtype) do |m|
-        m.send_mail(mail, self.fromaddr, *self.toaddr)
+        m.send_mail(mail, fromaddr, *toaddr)
       end
     else
       i = Dir.glob("mail-*.txt").grep(/\d+/) {$&.to_i}.max || 0
@@ -313,14 +339,13 @@ def ask(prompt, ans = "")
   c
 end
 
-FROMADDR = "pibal@example.com"
 speed = nil
 interval = nil
 alarm = 3
 view = true
 wait = 0.2
 opt = nil
-mailopt = Mailer.new(FROMADDR, [])
+mailopt = Mailer.new
 ARGV.options do |o|
   opt = o
   opt.on("-i", "--interval=SEC", Integer, "measuring interval in seconds") {|i| interval = i}
@@ -329,16 +354,8 @@ ARGV.options do |o|
   opt.on("--[no-]view") {|v| view = v}
   opt.on("--wait=SEC", Float, "wait in view mode") {|v| wait = v}
   opt.on("--to=ADDR") {|s| mailopt.toaddr << s}
-  opt.on("--from=ADDR") {|s| mailopt.fromaddr = s}
   opt.on("-I", "--image-type={GIF,JPEG,PNG}", PiBal::IMAGE_EXTS.keys) {|i| mailopt.image_type = i}
-  opt.on("-M", "--[no-]sendmail[=host:port]", /([^:]+)(?::(\d+))?/) {|s, host, port|
-    if s
-      mailopt.hostname = nil
-    else
-      mailopt.hostname = host
-      mailopt.hostport = port.to_i
-    end
-  }
+  opt.on("-M", "--[no-]sendmail[=user[/auth]@host[:port][!!]", Mailer::SERVER_PATTERN) {|s, *a| mailopt.server = a}
   opt.parse! rescue opt.abort([$!.message, opt.to_s].join("\n"))
 end
 if interval
