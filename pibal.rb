@@ -268,7 +268,6 @@ class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :aut
           else
             "application/octet-stream"
           end
-        filename &&= "; filename=#{filename.dump}"
       else
         content_type ||= "text/plain"
         charset ||=
@@ -283,6 +282,7 @@ class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :aut
         header = "Content-Type: #{content_type}; charset=#{charset}"
         body = data
       else
+        filename &&= "; filename=#{filename.dump}"
         header = ["Content-Type: #{content_type}",
                   "Content-Disposition: inline#{filename}",
                   'Content-Transfer-Encoding: base64']
