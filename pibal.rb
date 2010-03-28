@@ -359,6 +359,7 @@ ARGV.options do |o|
   opt.on("--to=ADDR") {|s| mailopt.toaddr << s}
   opt.on("-I", "--image-type={GIF,JPEG,PNG}", PiBal::IMAGE_EXTS.keys) {|i| mailopt.image_type = i}
   opt.on("-M", "--[no-]sendmail[=user[/auth]@host[:port][!!]", Mailer::SERVER_PATTERN) {|s, *a| mailopt.server = a}
+  opt.on("--default[=FILE]", "load default options from FILE") {|f| opt.load(f)}
   opt.parse! rescue opt.abort([$!.message, opt.to_s].join("\n"))
 end
 if interval
