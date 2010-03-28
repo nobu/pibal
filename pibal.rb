@@ -290,18 +290,19 @@ class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :aut
     return header, body
   end
 
-  def send(data, time = Time.now)
+  def send(data, subject)
     if host = self.host and user = self.user
       passwd = Net::Netrc.load[host][user].password
     end
-    if !(fromaddr = self.fromaddr) and (fromaddr = user) and /@/ !~ user
+    if !(fromaddr = self.fromaddr) and (fromaddr = user) and !user.empty? and
+        /@/ !~ user and !host.empty?
       fromaddr = "#{user}@#{host}"
     end
     header, body = body(data)
     mail = [
             "To: #{self.toaddr.join(", ")}",
-            "From: #{self.fromaddr || "#{user}@#{host}"}",
-            "Subject: pibal #{time.strftime("%H:%M:%S")}",
+            "From: #{fromaddr}",
+            "Subject: #{subject}",
             'MIME-Version: 1.0',
             header, '', body
            ].join("\n")
@@ -370,7 +371,7 @@ def mailopt.send(pibal, starttime)
   results = pibal.results.join("\n")
   image, ext = pibal.image(type = self.image_type) {pibal.plot}
   image = {data: image, content_type: "image/#{type}", filename: "pibal.#{ext}"}
-  super([results, image], starttime)
+  super([results, image], "pibal #{starttime.strftime("%H:%M:%S")}")
 end
 
 if ARGV.empty?
