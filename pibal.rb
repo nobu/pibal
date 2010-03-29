@@ -33,7 +33,7 @@ end
 class Gnuplot < IO
   COMMAND = "gnuplot"
   def self.new(command = COMMAND)
-    popen([command, "-", err:[:child, :out]], "r+")
+    popen([command, "-", err:[:child, :out]], "r+b")
   end
   def command(lines)
     lines.each_line do |line|
