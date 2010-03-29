@@ -190,7 +190,7 @@ class PiBal
   def image(type, size = [240, 240], font = ["arial", 10])
     d = nil
     ext = IMAGE_EXTS[type] or raise "unknown type `#{type}'"
-    Tempfile.open(%w"pibal .#{ext}") do |tmp|
+    Tempfile.open(%W"pibal .#{ext}") do |tmp|
       tmp.close
       command(<<-OUTPUT)
         set terminal push
