@@ -171,7 +171,7 @@ class PiBal
 
   def result(info = @data.last)
     azim, elev, x, y, z, dx, dy, deg, vel = *info
-    sprintf("~%.4d %4s %4.1f", z, DEGREE%deg, vel)
+    sprintf("~%4d %4s %4.1f", z, DEGREE%deg, vel)
   end
 
   def results
