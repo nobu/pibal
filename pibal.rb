@@ -1,11 +1,11 @@
 #! /usr/local/bin/ruby19
 
 require 'tempfile'
-require 'netrc'
 require 'net/smtp'
-require 'io/console'
 require 'optparse'
 require 'time'
+require 'netrc'
+require 'io/console'
 require_relative 'tds01v'
 
 STDOUT.sync = true
