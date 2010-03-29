@@ -203,7 +203,7 @@ class PiBal
         set output
         set terminal pop
       OUTPUT
-      d = tmp.open.read
+      d = tmp.open.binmode.read
     end
     return d, ext
   end
