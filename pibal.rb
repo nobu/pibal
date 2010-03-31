@@ -421,6 +421,7 @@ if ARGV.empty?
       end
     rescue StopIteration, EOFError
     end
+    watcher.kill
     print clear_line
     mailopt.send(pibal, starttime)
     /y/i =~ ask("Continue? [Y/n]", "YyNn")
