@@ -348,6 +348,7 @@ end
 
 speed = nil
 interval = nil
+port = nil
 alarm = 3
 view = true
 wait = 0.2
@@ -357,6 +358,7 @@ ARGV.options do |o|
   opt = o
   opt.on("-i", "--interval=SEC", Integer, "measuring interval in seconds") {|i| interval = i}
   opt.on("-s", "--speed=M/min", Integer, "ascending meters in a minute", [50, 100]) {|i| speed = i}
+  opt.on("-p", "--port=PORT", "TDS01V port") {|v| port = v}
   opt.on("-a", "--alarm=N", Integer, "alarms N times") {|i| alarm = i}
   opt.on("--[no-]view") {|v| view = v}
   opt.on("--wait=SEC", Float, "wait in view mode") {|v| wait = v}
@@ -389,7 +391,7 @@ if ARGV.empty?
   else
     clear_line = cr = ""
   end
-  tds = TDS01V.new
+  tds = TDS01V.new(port) rescue opt.abort("failed to open port #{port}")
   PiBal.session(speed) do |pibal|
     z = interval * (speed = pibal.speed)
     puts "ROM version = #{tds.rom_version * '.'}"
