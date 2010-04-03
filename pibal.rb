@@ -49,10 +49,11 @@ class PiBal
   include Math
   DEG2RAD = PI / 180
   RAD2DEG = 180 / PI
+  DEFAULT_INTERVAL = 60
   DEFAULT_SPEED = Rational(100, 60)
 
   attr_reader :scale, :data
-  attr_accessor :speed
+  attr_accessor :speed, :interval
 
   def self.open(*args)
     pibal = new(*args)
@@ -78,9 +79,10 @@ class PiBal
     @data.clear
   end
 
-  def initialize(speed = nil)
+  def initialize(speed = nil, interval = nil)
     @plot = nil
     @speed = speed || DEFAULT_SPEED
+    @interval = interval || DEFAULT_INTERVAL
     @data = []
     clear
   end
@@ -369,9 +371,8 @@ ARGV.options do |o|
   opt.on("--default[=FILE]", "load default options from FILE") {|f| opt.load(f)}
   opt.parse! rescue opt.abort([$!.message, opt.to_s].join("\n"))
 end
-if interval
-  alarm = [alarm, interval-1].min
-  ARGV.empty? or opt.abort("--interval and log files are mutual")
+if ARGV == %w[-]
+  ARGV.empty? or opt.abort("- and log files are mutual")
 elsif ARGV.empty?
   puts opt
   exit
@@ -392,8 +393,9 @@ if ARGV.empty?
     clear_line = cr = ""
   end
   tds = TDS01V.new(port) rescue opt.abort("failed to open port #{port}")
-  PiBal.session(speed) do |pibal|
-    z = interval * (speed = pibal.speed)
+  PiBal.session(speed, interval) do |pibal|
+    z = (interval = pibal.interval) * (speed = pibal.speed)
+    alarm_cnt = [alarm, interval-1].min
     puts "ROM version = #{tds.rom_version * '.'}"
     watcher = Thread.start(Thread.current) do |main|
       ask("Hit enter to finish.\n") if tty
@@ -404,7 +406,11 @@ if ARGV.empty?
     starttime = Time.now
     begin
       open("pibal-#{starttime.strftime("%Y%m%d_%H%M%S")}.log", "wb") do |log|
-        log.puts("#{starttime} (#{speed * 60}m/min)")
+        mmin = speed * 60
+        if mmin.numerator == 1
+          mmin = mmin.denominator
+        end
+        log.puts("#{starttime} (#{mmin} m/min)")
         tds.enum_for(:start).with_index do |x, i|
           print clear_line
           n = (i + 1) % interval
@@ -416,7 +422,7 @@ if ARGV.empty?
             puts info
             log.puts info
           elsif tty
-            SOUNDS.play(0) if interval - n < alarm
+            SOUNDS.play(0) if interval - n < alarm_cnt
             print x, cr
           end
         end
@@ -431,12 +437,12 @@ if ARGV.empty?
 else
   PiBal.session() do |pibal|
     firstline = ARGF.gets or break
-    unless speed = firstline[/(\d+)m\/min/, 1]
+    unless speed = firstline[/(\d+)(?:\/(\d+))?\s*m\/min/, 1]
       ARGF.close
       opt.warn "missing acsending speed in #{ARGF.filename}"
       redo
     end
-    pibal.speed = Rational(speed.to_i, 60)
+    pibal.speed = Rational(speed.to_i, ($2 ? $2.to_i : 1) * 60)
     starttime = Time.parse(firstline)
     puts pibal.title
     ARGF.each_line do |line|
