@@ -334,10 +334,10 @@ class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :aut
   end
 end
 
-def ask(prompt, ans = "")
+def ask(prompt, ans = nil)
   STDOUT.print(prompt)
-  while c = STDIN.noecho {STDIN.getc}
-    if ans.include?(c)
+  while c = (ans ? STDIN.getch : STDIN.noecho {STDIN.getc})
+    if ans and ans.include?(c)
       break
     elsif "\r\n".include?(c)
       c = nil
