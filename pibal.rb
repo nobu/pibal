@@ -276,7 +276,6 @@ class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :aut
         unless charset
           if (text = data.dup.force_encoding(Encoding::US_ASCII)).valid_encoding?
             data = text
-            charset = "us-ascii"
           elsif /jis|jp|cp932/i =~ (charset = data.encoding.name)
             data = data.encode(charset = "iso-2022-jp")
           else
@@ -285,7 +284,8 @@ class Mailer < Struct.new(:fromaddr, :toaddr, :host, :port, :user, :passwd, :aut
         end
       end
       if /^text\// =~ content_type
-        header = "Content-Type: #{content_type}; charset=#{charset}"
+        charset &&= "; charset=#{charset}"
+        header = "Content-Type: #{content_type}#{charset}"
         body = data
       else
         filename &&= "; filename=#{filename.dump}"
