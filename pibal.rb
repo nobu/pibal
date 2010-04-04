@@ -355,9 +355,11 @@ alarm = 3
 view = true
 wait = 0.2
 opt = nil
+measure = false
 mailopt = Mailer.new
 ARGV.options do |o|
   opt = o
+  opt.on("-m", "--measure", "measure") {measure = true}
   opt.on("-i", "--interval=SEC", Integer, "measuring interval in seconds") {|i| interval = i}
   opt.on("-s", "--speed=M/min", Integer, "ascending meters in a minute", [50, 100]) {|i| speed = i}
   opt.on("-p", "--port=PORT", "TDS01V port") {|v| port = v}
@@ -371,12 +373,6 @@ ARGV.options do |o|
   opt.on("--default[=FILE]", "load default options from FILE") {|f| opt.load(f)}
   opt.parse! rescue opt.abort([$!.message, opt.to_s].join("\n"))
 end
-if ARGV == %w[-]
-  ARGV.empty? or opt.abort("- and log files are mutual")
-elsif ARGV.empty?
-  puts opt
-  exit
-end
 
 def mailopt.send(pibal, starttime)
   results = pibal.results.join("\n")
@@ -385,7 +381,8 @@ def mailopt.send(pibal, starttime)
   super([results, image], "pibal #{starttime.strftime("%H:%M:%S")}")
 end
 
-if ARGV.empty?
+if measure or interval          # 
+  ARGV.empty? or opt.abort("--measure (or --interval) and log files are mutual")
   if tty = STDOUT.tty?
     clear_line = "\r\e[K"
     cr = "\r"
@@ -434,6 +431,8 @@ if ARGV.empty?
     mailopt.send(pibal, starttime)
     /y/i =~ ask("Continue? [Y/n]", "YyNn")
   end
+elsif ARGV.empty?
+  puts opt
 else
   PiBal.session() do |pibal|
     firstline = ARGF.gets or break
