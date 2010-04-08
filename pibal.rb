@@ -400,6 +400,10 @@ if measure or interval          #
     end
     pibal.plot if view
     puts pibal.title
+    if tty
+      alarm.times {SOUNDS.play(0); sleep 1}
+      SOUNDS.play(1)
+    end
     starttime = Time.now
     begin
       open("pibal-#{starttime.strftime("%Y%m%d_%H%M%S")}.log", "wb") do |log|
