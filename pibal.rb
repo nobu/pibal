@@ -410,7 +410,8 @@ if measure or interval          #
         log.puts("#{starttime} (#{mmin} m/min)")
         tds.enum_for(:start).with_index do |x, i|
           print clear_line
-          n = (i + 1) % interval
+          next if i.zero?
+          n = i % interval
           if n.zero?
             SOUNDS.play(1) if tty
             pibal.add((z * i), x.azimuth.fdiv(10), x.pitch.fdiv(10))
