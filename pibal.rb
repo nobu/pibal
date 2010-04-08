@@ -404,8 +404,8 @@ if measure or interval          #
     begin
       open("pibal-#{starttime.strftime("%Y%m%d_%H%M%S")}.log", "wb") do |log|
         mmin = speed * 60
-        if mmin.numerator == 1
-          mmin = mmin.denominator
+        if mmin.denominator == 1
+          mmin = mmin.numerator
         end
         log.puts("#{starttime} (#{mmin} m/min)")
         tds.enum_for(:start).with_index do |x, i|
